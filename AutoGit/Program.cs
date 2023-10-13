@@ -1,43 +1,47 @@
-﻿using LibGit2Sharp;
-using System;
+﻿using System;
+using System.Diagnostics;
 using System.IO;
 
 internal class Program
 {
-    private static void Main()
+    private static void Main(string[] args)
     {
-        var currentDirectory = Environment.CurrentDirectory;
-        var gitRepositoryPath = Path.Combine(currentDirectory, ".git");
+        var currentDirectory = args.FirstOrDefault() ?? Environment.CurrentDirectory;
 
-        using (var repo = new Repository(gitRepositoryPath))
-        using (var watcher = new FileSystemWatcher(currentDirectory))
+        using var watcher = new FileSystemWatcher(currentDirectory);
+        watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
+        watcher.IncludeSubdirectories = true;
+
+        watcher.Changed += (sender, eventArgs) =>
         {
-            watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
-            watcher.IncludeSubdirectories = true;
+            var changedFilePath = eventArgs.FullPath;
 
-            watcher.Changed += (sender, eventArgs) =>
+            // Ignore changes in the .git folder
+            if (!changedFilePath.Contains(Path.Combine(currentDirectory, ".git"), StringComparison.OrdinalIgnoreCase))
             {
-                // Ignore changes in the .git folder
-                if (!eventArgs.FullPath.StartsWith(gitRepositoryPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    Console.WriteLine($"File {eventArgs.FullPath} has been changed. Committing changes...");
+                Console.WriteLine($"File {changedFilePath} has been changed. Committing changes...");
 
-                    using (var repo = new Repository(gitRepositoryPath))
-                    {
-                        Commands.Stage(repo, "*");
-                        var author = new Signature("Kaven", "kaven@wuwenkai.com", DateTimeOffset.Now);
-                        var committer = author;
+                CommitChanges(currentDirectory);
+            }
+        };
 
-                        var commit = repo.Commit("Changes auto-committed by FileSystemWatcher", author, committer);
-                        Console.WriteLine($"Changes committed with commit id: {commit.Id.Sha}");
-                    }
-                }
-            };
+        watcher.EnableRaisingEvents = true;
 
-            watcher.EnableRaisingEvents = true;
+        Console.WriteLine($"Monitoring directory: {currentDirectory}. Press Enter to exit.");
+        Console.ReadLine();
+    }
 
-            Console.WriteLine($"Monitoring directory: {currentDirectory}. Press Enter to exit.");
-            Console.ReadLine();
-        }
+    private static void CommitChanges(string repositoryPath)
+    {
+        using var process = new Process();
+        process.StartInfo.FileName = "git";
+        process.StartInfo.WorkingDirectory = repositoryPath;
+        process.StartInfo.Arguments = "add -A";
+        process.Start();
+        process.WaitForExit();
+
+        process.StartInfo.Arguments = "commit -m \"Changes auto-committed by FileSystemWatcher\"";
+        process.Start();
+        process.WaitForExit();
     }
 }
