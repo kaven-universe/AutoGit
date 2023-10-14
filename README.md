@@ -1,6 +1,11 @@
 Auto Git Commit with FileSystemWatcher
 ======================================
 
+Background
+--------
+
+Because there are always problems with steam synchronization, I use git to synchronize game archives.
+
 Overview
 --------
 
