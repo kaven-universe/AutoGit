@@ -7,6 +7,7 @@ internal class Program
     private static void Main(string[] args)
     {
         var currentDirectory = args.FirstOrDefault() ?? Environment.CurrentDirectory;
+        DateTime? lastChangedDate = null;
 
         using var watcher = new FileSystemWatcher(currentDirectory);
         watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName;
@@ -19,13 +20,25 @@ internal class Program
             // Ignore changes in the .git folder
             if (!changedFilePath.Contains(Path.Combine(currentDirectory, ".git"), StringComparison.OrdinalIgnoreCase))
             {
-                Console.WriteLine($"File {changedFilePath} has been changed. Committing changes...");
-
-                CommitChanges(currentDirectory);
+                Console.WriteLine($"File {changedFilePath} has been changed.");
+                lastChangedDate = DateTime.Now;
             }
         };
 
         watcher.EnableRaisingEvents = true;
+
+        using var timer = new Timer(_ =>
+        {
+            if (lastChangedDate != null && DateTime.Now - lastChangedDate > TimeSpan.FromSeconds(5))
+            {
+                lastChangedDate = null;
+
+                Console.WriteLine("Committing changes...");
+                CommitChanges(currentDirectory);
+            }
+        });
+
+        timer.Change(5000, 5000);
 
         Console.WriteLine($"Monitoring directory: {currentDirectory}. Press Enter to exit.");
         Console.ReadLine();
